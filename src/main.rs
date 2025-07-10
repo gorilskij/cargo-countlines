@@ -2,6 +2,7 @@ mod count;
 mod languages;
 
 use std::{
+    cmp::Ordering,
     env::current_dir,
     error::Error,
     path::{Path, PathBuf},
@@ -12,6 +13,7 @@ use argh::FromArgs;
 use count::{Config, CountError, walk};
 use globset::{Glob, GlobSetBuilder};
 use languages::{Languages, LanguagesError};
+use tabled::settings::Style;
 use thiserror::Error;
 
 // === Commands ===
@@ -128,14 +130,38 @@ fn main_() -> Result<(), AppError> {
     let output = walk(&config)?;
     let time = start.elapsed();
 
-    for (lang_id, counts) in output.counts {
-        println!("{}", config.languages[lang_id].name);
-        println!("    files {}", counts.files);
-        println!("     code {}", counts.code);
-        println!("   unsafe {}", counts.unsafe_);
-        println!("  comment {}", counts.comment);
-        println!("    blank {}", counts.blank);
+    let ordered_counts = {
+        let mut ordered_counts = output
+            .counts
+            .iter()
+            .map(|(lang_id, counts)| (*lang_id, counts))
+            .collect::<Vec<_>>();
+
+        // reverse order by number of code lines, forward order by language
+        ordered_counts.sort_unstable_by(|(lang_id1, counts1), (lang_id2, counts2)| {
+            match counts2.code.cmp(&counts1.code) {
+                Ordering::Equal => lang_id1.cmp(lang_id2),
+                ord => ord,
+            }
+        });
+        ordered_counts
+    };
+
+    let mut builder = tabled::builder::Builder::default();
+    builder.push_record(["", "files", "code", "comment", "blank"]);
+    for (lang_id, counts) in ordered_counts {
+        builder.push_record([
+            config.languages[lang_id].name.clone(),
+            counts.files.to_string(),
+            counts.code.to_string(),
+            counts.comment.to_string(),
+            counts.blank.to_string(),
+        ]);
     }
+
+    let mut table = builder.build();
+    println!("{}", table.with(Style::rounded()));
+
     println!("{} files errored", output.error_files);
     println!("results in {:?}", time);
 

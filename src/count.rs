@@ -1,9 +1,8 @@
 use std::{
     collections::{HashMap, hash_map::Entry},
-    fs::{File, read_to_string},
+    fs::File,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    process::Output,
 };
 
 use globset::GlobSet;
