@@ -13,7 +13,7 @@ use argh::FromArgs;
 use count::{Config, CountError, OutputCounts, walk};
 use globset::{Glob, GlobSetBuilder};
 use languages::{Languages, LanguagesError};
-use tabled::settings::Style;
+use tabled::settings::{Alignment, Style, object::Columns};
 use thiserror::Error;
 
 // === Commands ===
@@ -121,6 +121,20 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
     })
 }
 
+fn format_number(num: usize) -> String {
+    let s = num.to_string();
+    let mut x = s.len() % 3;
+    let mut out = String::new();
+    for c in s.chars() {
+        if x == 0 {
+            out.push(' ');
+        }
+        x = (x + 2) % 3; // x - 1 (mod 3)
+        out.push(c);
+    }
+    out
+}
+
 fn print(output: OutputCounts, languages: &Languages, time: Duration) {
     let ordered_counts = {
         let mut ordered_counts = output
@@ -144,14 +158,18 @@ fn print(output: OutputCounts, languages: &Languages, time: Duration) {
     for (lang_id, counts) in ordered_counts {
         builder.push_record([
             languages[lang_id].name.clone(),
-            counts.files.to_string(),
-            counts.code.to_string(),
-            counts.comment.to_string(),
-            counts.blank.to_string(),
+            format_number(counts.files),
+            format_number(counts.code),
+            format_number(counts.comment),
+            format_number(counts.blank),
         ]);
     }
 
     let mut table = builder.build();
+    table.modify(Columns::one(1), Alignment::right());
+    table.modify(Columns::one(2), Alignment::right());
+    table.modify(Columns::one(3), Alignment::right());
+    table.modify(Columns::one(4), Alignment::right());
     println!("{}", table.with(Style::rounded()));
 
     println!("{} files errored", output.error_files);
