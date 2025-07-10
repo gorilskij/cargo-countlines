@@ -1,0 +1,15 @@
+[package]
+name = "cargo-countlines"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+argh = "0.1.13"
+globset = "0.4.16"
+serde = "1.0.219"
+serde_json = "1.0.140"
+thiserror = "2.0.12"
+walkdir = "2.5.0"
+
+[profile.release]
+debug = "line-tables-only"
