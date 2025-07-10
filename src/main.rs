@@ -6,11 +6,11 @@ use std::{
     env::current_dir,
     error::Error,
     path::{Path, PathBuf},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use argh::FromArgs;
-use count::{Config, CountError, walk};
+use count::{Config, CountError, OutputCounts, walk};
 use globset::{Glob, GlobSetBuilder};
 use languages::{Languages, LanguagesError};
 use tabled::settings::Style;
@@ -121,15 +121,7 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
     })
 }
 
-fn main_() -> Result<(), AppError> {
-    let Cargo { countlines: args } = argh::from_env();
-
-    let config = parse_args(&args)?;
-
-    let start = Instant::now();
-    let output = walk(&config)?;
-    let time = start.elapsed();
-
+fn print(output: OutputCounts, languages: &Languages, time: Duration) {
     let ordered_counts = {
         let mut ordered_counts = output
             .counts
@@ -151,7 +143,7 @@ fn main_() -> Result<(), AppError> {
     builder.push_record(["", "files", "code", "comment", "blank"]);
     for (lang_id, counts) in ordered_counts {
         builder.push_record([
-            config.languages[lang_id].name.clone(),
+            languages[lang_id].name.clone(),
             counts.files.to_string(),
             counts.code.to_string(),
             counts.comment.to_string(),
@@ -164,6 +156,18 @@ fn main_() -> Result<(), AppError> {
 
     println!("{} files errored", output.error_files);
     println!("results in {:?}", time);
+}
+
+fn main_() -> Result<(), AppError> {
+    let Cargo { countlines: args } = argh::from_env();
+
+    let config = parse_args(&args)?;
+
+    let start = Instant::now();
+    let output = walk(&config)?;
+    let time = start.elapsed();
+
+    print(output, &config.languages, time);
 
     Ok(())
 }
