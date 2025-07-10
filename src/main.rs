@@ -1,5 +1,6 @@
 mod count;
 mod languages;
+mod util;
 
 use std::{
     cmp::Ordering,
@@ -15,6 +16,7 @@ use globset::{Glob, GlobSetBuilder};
 use languages::{Languages, LanguagesError};
 use tabled::settings::{Alignment, Style, object::Columns};
 use thiserror::Error;
+use util::format_number;
 
 // === Commands ===
 
@@ -121,20 +123,6 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
     })
 }
 
-fn format_number(num: usize) -> String {
-    let s = num.to_string();
-    let mut x = s.len() % 3;
-    let mut out = String::new();
-    for c in s.chars() {
-        if x == 0 {
-            out.push(' ');
-        }
-        x = (x + 2) % 3; // x - 1 (mod 3)
-        out.push(c);
-    }
-    out
-}
-
 fn print(output: OutputCounts, languages: &Languages, time: Duration) {
     let ordered_counts = {
         let mut ordered_counts = output
@@ -154,7 +142,7 @@ fn print(output: OutputCounts, languages: &Languages, time: Duration) {
     };
 
     let mut builder = tabled::builder::Builder::default();
-    builder.push_record(["", "files", "code", "comment", "blank"]);
+    builder.push_record(["", "files", "code", "comment", "blank", "invalid"]);
     for (lang_id, counts) in ordered_counts {
         builder.push_record([
             languages[lang_id].name.clone(),
@@ -162,6 +150,7 @@ fn print(output: OutputCounts, languages: &Languages, time: Duration) {
             format_number(counts.code),
             format_number(counts.comment),
             format_number(counts.blank),
+            format_number(counts.invalid),
         ]);
     }
 
@@ -170,6 +159,7 @@ fn print(output: OutputCounts, languages: &Languages, time: Duration) {
     table.modify(Columns::one(2), Alignment::right());
     table.modify(Columns::one(3), Alignment::right());
     table.modify(Columns::one(4), Alignment::right());
+    table.modify(Columns::one(5), Alignment::right());
     println!("{}", table.with(Style::rounded()));
 
     println!("{} files errored", output.error_files);
@@ -177,6 +167,8 @@ fn print(output: OutputCounts, languages: &Languages, time: Duration) {
 }
 
 fn main_() -> Result<(), AppError> {
+    env_logger::init();
+
     let Cargo { countlines: args } = argh::from_env();
 
     let config = parse_args(&args)?;
@@ -208,7 +200,7 @@ impl<'a> Iterator for Source<'a> {
 fn main() {
     match main_() {
         Err(err) => {
-            println!("{}", err);
+            println!("{err}");
             let mut sources = Source {
                 current: err.source(),
             }
@@ -216,9 +208,9 @@ fn main() {
 
             while let Some(err) = sources.next() {
                 if sources.peek().is_some() {
-                    println!("┣ {}", err)
+                    println!("┣ {err}")
                 } else {
-                    println!("┗ {}", err)
+                    println!("┗ {err}")
                 }
             }
         }
