@@ -128,7 +128,7 @@ fn main_() -> Result<(), AppError> {
     let output = walk(&config)?;
     let time = start.elapsed();
 
-    for (lang_id, counts) in output {
+    for (lang_id, counts) in output.counts {
         println!("{}", config.languages[lang_id].name);
         println!("    files {}", counts.files);
         println!("     code {}", counts.code);
@@ -136,6 +136,7 @@ fn main_() -> Result<(), AppError> {
         println!("  comment {}", counts.comment);
         println!("    blank {}", counts.blank);
     }
+    println!("{} files errored", output.error_files);
     println!("results in {:?}", time);
 
     Ok(())
