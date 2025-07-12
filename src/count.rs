@@ -24,11 +24,10 @@ pub enum CountError {
 }
 
 pub struct Config {
-    // absolute path
-    pub root: PathBuf,
+    pub abs_root: PathBuf,
+    pub rel_root: PathBuf, // relative to cwd
     pub languages: Languages,
-    // all paths are absolute
-    pub exclude: GlobSet,
+    pub exclude: GlobSet, // all glob patterns are absolute
     pub ignore_hidden: bool,
 }
 
@@ -129,7 +128,7 @@ impl OutputCounts {
 }
 
 pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
-    let iter = WalkDir::new(&config.root)
+    let iter = WalkDir::new(&config.abs_root)
         .into_iter()
         .filter_entry(|entry| {
             // `as_encoded_bytes` returns a "self-synchronizing superset of UTF-8"
@@ -154,7 +153,17 @@ pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
             };
 
             info!("{:?}", entry.path());
-            pbar.set_message(entry.path().to_string_lossy().to_string());
+            {
+                // display path relative to cwd
+                // default to absolute path if `stip_prefix` fails
+                let display_path = entry
+                    .path()
+                    .strip_prefix(&config.abs_root)
+                    .map(|rel_path| config.rel_root.join(rel_path).to_string_lossy().to_string())
+                    .unwrap_or_else(|_| entry.path().to_string_lossy().to_string());
+
+                pbar.set_message(display_path);
+            }
 
             for (lang_id, lang) in (&config.languages).into_iter().enumerate() {
                 for ext in &lang.extensions {

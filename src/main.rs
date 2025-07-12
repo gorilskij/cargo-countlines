@@ -3,6 +3,7 @@ mod languages;
 mod util;
 
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     env::current_dir,
     error::Error,
@@ -76,22 +77,47 @@ enum AppError {
 
 // === Main ===
 
+fn relativize_path(path: Cow<Path>) -> Cow<Path> {
+    // try to relativize the path, if anything fails, just treat it as unrelated to cwd
+    assert!(path.is_absolute());
+    if let Some(rel_path) = current_dir()
+        .ok()
+        .and_then(|cwd| path.strip_prefix(&cwd).ok())
+    {
+        Path::new(".").join(rel_path).into()
+    } else {
+        path
+    }
+}
+
+fn add_rel_dot(path: Cow<Path>) -> Cow<Path> {
+    if path.is_absolute() || path.starts_with(".") || path.starts_with("..") {
+        return path;
+    }
+    Path::new(".").join(path).into()
+}
+
 fn parse_args(args: &Countlines) -> Result<Config, AppError> {
-    let root = match &args.path {
+    let (abs_root, rel_root) = match &args.path {
         Some(path) => {
-            let root = PathBuf::from(&path);
-            if !root.exists() {
+            let input_root = PathBuf::from(&path);
+            if !input_root.exists() {
                 return Err(ArgumentError::NonexistentPath(path.to_string()).into());
             }
-            if root.is_absolute() {
-                root
+            if input_root.is_absolute() {
+                let rel_root = relativize_path((&input_root).into()).into_owned();
+                (input_root, rel_root)
             } else {
-                let mut abs = current_dir()?;
-                abs.push(root);
-                abs
+                let abs_root = current_dir()?.join(&input_root);
+                let rel_root = add_rel_dot(input_root.into()).into_owned();
+                (abs_root, rel_root)
             }
         }
-        None => current_dir()?,
+        None => {
+            let cwd = current_dir()?;
+            let dot = Path::new(".").to_owned();
+            (cwd, dot)
+        }
     };
 
     let languages = Languages::load("language_packs/default.json")?;
@@ -103,10 +129,11 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
             if pattern_path.is_absolute() {
                 builder.add(Glob::new(pattern)?);
             } else {
-                let mut abs = root.clone();
-                abs.push(pattern);
+                let mut abs_pattern = abs_root.clone();
+                abs_pattern.push(pattern);
                 builder.add(Glob::new(
-                    abs.as_os_str()
+                    abs_pattern
+                        .as_os_str()
                         .to_str()
                         .expect("non UTF-8 paths are not supported"),
                 )?);
@@ -116,7 +143,8 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
     let exclude = builder.build()?;
 
     Ok(Config {
-        root,
+        abs_root,
+        rel_root,
         languages,
         exclude,
         ignore_hidden: args.ignore_hidden,
