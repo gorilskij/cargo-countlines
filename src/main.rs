@@ -1,10 +1,10 @@
 mod count;
 mod languages;
+mod table;
 mod util;
 
 use std::{
     borrow::Cow,
-    cmp::Ordering,
     env::current_dir,
     error::Error,
     path::{Path, PathBuf},
@@ -15,9 +15,8 @@ use argh::FromArgs;
 use count::{Config, CountError, OutputCounts, walk};
 use globset::{Glob, GlobSetBuilder};
 use languages::{Languages, LanguagesError};
-use tabled::settings::{Alignment, Style, object::Columns};
+use table::make_table;
 use thiserror::Error;
-use util::format_number;
 
 // === Commands ===
 
@@ -38,15 +37,24 @@ struct Countlines {
 
     #[argh(
         option,
+        short = 'e',
         description = "comma-separated list of files and directories to exclude, both absolute and relative paths are supported"
     )]
-    exclude: Option<String>,
+    exclude: Vec<String>,
 
     #[argh(
         switch,
+        short = 'H',
         description = "ignore hidden files and directories (names starting with .)"
     )]
     ignore_hidden: bool,
+
+    #[argh(
+        switch,
+        short = 'q',
+        description = "do not print progress information while counting lines"
+    )]
+    quiet: bool,
 }
 
 // === Errors ===
@@ -123,21 +131,19 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
     let languages = Languages::load("language_packs/default.json")?;
 
     let mut builder = GlobSetBuilder::new();
-    if let Some(exclude_list) = &args.exclude {
-        for pattern in exclude_list.split(',') {
-            let pattern_path = Path::new(pattern);
-            if pattern_path.is_absolute() {
-                builder.add(Glob::new(pattern)?);
-            } else {
-                let mut abs_pattern = abs_root.clone();
-                abs_pattern.push(pattern);
-                builder.add(Glob::new(
-                    abs_pattern
-                        .as_os_str()
-                        .to_str()
-                        .expect("non UTF-8 paths are not supported"),
-                )?);
-            }
+    for pattern in &args.exclude {
+        let pattern_path = Path::new(pattern);
+        if pattern_path.is_absolute() {
+            builder.add(Glob::new(pattern)?);
+        } else {
+            let mut abs_pattern = abs_root.clone();
+            abs_pattern.push(pattern);
+            builder.add(Glob::new(
+                abs_pattern
+                    .as_os_str()
+                    .to_str()
+                    .expect("non UTF-8 paths are not supported"),
+            )?);
         }
     }
     let exclude = builder.build()?;
@@ -148,47 +154,13 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
         languages,
         exclude,
         ignore_hidden: args.ignore_hidden,
+        quiet: args.quiet,
     })
 }
 
 fn print(output: OutputCounts, languages: &Languages, time: Duration) {
-    let ordered_counts = {
-        let mut ordered_counts = output
-            .counts
-            .iter()
-            .map(|(lang_id, counts)| (*lang_id, counts))
-            .collect::<Vec<_>>();
-
-        // reverse order by number of code lines, forward order by language
-        ordered_counts.sort_unstable_by(|(lang_id1, counts1), (lang_id2, counts2)| {
-            match counts2.code.cmp(&counts1.code) {
-                Ordering::Equal => lang_id1.cmp(lang_id2),
-                ord => ord,
-            }
-        });
-        ordered_counts
-    };
-
-    let mut builder = tabled::builder::Builder::default();
-    builder.push_record(["", "files", "code", "comment", "blank", "invalid"]);
-    for (lang_id, counts) in ordered_counts {
-        builder.push_record([
-            languages[lang_id].name.clone(),
-            format_number(counts.files),
-            format_number(counts.code),
-            format_number(counts.comment),
-            format_number(counts.blank),
-            format_number(counts.invalid),
-        ]);
-    }
-
-    let mut table = builder.build();
-    table.modify(Columns::one(1), Alignment::right());
-    table.modify(Columns::one(2), Alignment::right());
-    table.modify(Columns::one(3), Alignment::right());
-    table.modify(Columns::one(4), Alignment::right());
-    table.modify(Columns::one(5), Alignment::right());
-    println!("{}", table.with(Style::rounded()));
+    let table = make_table(&output, languages);
+    println!("{table}");
 
     println!("{} files errored", output.error_files);
     println!("results in {:?}", time);

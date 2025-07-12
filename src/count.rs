@@ -29,13 +29,13 @@ pub struct Config {
     pub languages: Languages,
     pub exclude: GlobSet, // all glob patterns are absolute
     pub ignore_hidden: bool,
+    pub quiet: bool,
 }
 
 #[derive(Clone)]
 pub struct Counts {
     pub files: usize,
     pub code: usize,
-    pub unsafe_: usize, // double-counted in `code`
     pub comment: usize,
     pub blank: usize,
     pub invalid: usize,
@@ -45,7 +45,6 @@ impl Counts {
     fn merge(&mut self, other: &Counts) {
         self.files += other.files;
         self.code += other.code;
-        self.unsafe_ += other.unsafe_;
         self.comment += other.comment;
         self.blank += other.blank;
         self.invalid += other.invalid;
@@ -54,7 +53,6 @@ impl Counts {
 
 fn count(path: &Path, lang: &Language) -> Result<Counts, std::io::Error> {
     let mut code = 0;
-    let mut unsafe_ = 0;
     let mut comment = 0;
     let mut blank = 0;
     let mut invalid = 0;
@@ -86,7 +84,6 @@ fn count(path: &Path, lang: &Language) -> Result<Counts, std::io::Error> {
     Ok(Counts {
         files: 1,
         code,
-        unsafe_,
         comment,
         blank,
         invalid,
@@ -138,14 +135,17 @@ pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
             !config.exclude.is_match(entry.path())
         });
 
-    let pbar = ProgressBar::no_length();
-    pbar.set_style(ProgressStyle::with_template("[{elapsed_precise}] {human_pos} {msg}").unwrap());
+    let pbar = (!config.quiet).then(|| {
+        let pbar = ProgressBar::no_length();
+        pbar.set_style(
+            ProgressStyle::with_template("[{elapsed_precise}] {human_pos} {msg}").unwrap(),
+        );
+        pbar
+    });
 
     let output = iter
         .par_bridge()
         .map(|entry| {
-            pbar.inc(1);
-
             let entry = match entry {
                 Ok(e) if e.file_type().is_file() => e,
                 Ok(_) => return EntryResult::None, // dir or symlink
@@ -153,7 +153,9 @@ pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
             };
 
             info!("{:?}", entry.path());
-            {
+            pbar.as_ref().map(|pbar| {
+                pbar.inc(1);
+
                 // display path relative to cwd
                 // default to absolute path if `stip_prefix` fails
                 let display_path = entry
@@ -163,7 +165,7 @@ pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
                     .unwrap_or_else(|_| entry.path().to_string_lossy().to_string());
 
                 pbar.set_message(display_path);
-            }
+            });
 
             for (lang_id, lang) in (&config.languages).into_iter().enumerate() {
                 for ext in &lang.extensions {
@@ -210,7 +212,7 @@ pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
             },
         );
 
-    pbar.finish_and_clear();
+    pbar.as_ref().map(|pbar| pbar.finish_and_clear());
 
     Ok(output)
 }
