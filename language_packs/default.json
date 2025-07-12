@@ -2,42 +2,53 @@
   {
     "name": "C",
     "extensions": [".c"],
-    "line_comments": ["//"]
+    "line_comments": ["//"],
+    "block_comments": [["/*", "*/"]]
   },
   {
     "name": "C Header",
     "extensions": [".h"],
-    "line_comments": ["//"]
+    "line_comments": ["//"],
+    "block_comments": [["/*", "*/"]]
   },
   {
     "name": "C++",
     "extensions": [".cpp", ".cp", ".cc", ".cxx", ".c++", ".C"],
-    "line_comments": ["//"]
+    "line_comments": ["//"],
+    "block_comments": [["/*", "*/"]]
   },
   {
     "name": "C++ Header",
     "extensions": [".hpp", ".h++"],
-    "line_comments": ["//"]
+    "line_comments": ["//"],
+    "block_comments": [["/*", "*/"]]
   },
   {
     "name": "Rust",
     "extensions": [".rs"],
-    "line_comments": ["//"]
+    "line_comments": ["//"],
+    "block_comments": [["/*", "*/"]]
   },
   {
     "name": "Ruby",
     "extensions": [".rb"],
-    "line_comments": ["#"]
+    "line_comments": ["#"],
+    "block_comments": [["=begin", "=end"]]
   },
   {
     "name": "Python",
     "extensions": [".py"],
-    "line_comments": ["#"]
+    "line_comments": ["#"],
+    "block_comments": [
+      ["'''", "'''"],
+      ["\"\"\"", "\"\"\""]
+    ]
   },
   {
     "name": "Haskell",
     "extensions": [".hs"],
-    "line_comments": ["--"]
+    "line_comments": ["--"],
+    "block_comments": [["{-", "-}"]]
   },
   {
     "name": "Toml",
@@ -46,30 +57,36 @@
   },
   {
     "name": "CSS",
-    "extensions": [".css"]
+    "extensions": [".css"],
+    "block_comments": [["/*", "*/"]]
   },
   {
     "name": "Java",
     "extensions": [".java"],
-    "line_comments": ["//"]
+    "line_comments": ["//"],
+    "block_comments": [["/*", "*/"]]
   },
   {
     "name": "JavaScript",
     "extensions": [".js"],
-    "line_comments": ["//"]
+    "line_comments": ["//"],
+    "block_comments": [["/*", "*/"]]
   },
   {
     "name": "XML",
-    "extensions": [".xml"]
+    "extensions": [".xml"],
+    "block_comments": [["<!--", "-->"]]
   },
   {
     "name": "HTML",
-    "extensions": [".html", ".htm"]
+    "extensions": [".html", ".htm"],
+    "block_comments": [["<!--", "-->"]]
   },
   {
     "name": "PHP",
     "extensions": [".php"],
-    "line_comments": ["//", "#"]
+    "line_comments": ["//", "#"],
+    "block_comments": [["/*", "*/"]]
   },
   {
     "name": "Perl",
@@ -79,7 +96,8 @@
   {
     "name": "Go",
     "extensions": [".go"],
-    "line_comments": ["//"]
+    "line_comments": ["//"],
+    "block_comments": [["/*", "*/"]]
   },
   {
     "name": "Assembly",
@@ -111,7 +129,11 @@
   {
     "name": "D",
     "extensions": [".d", ".di"],
-    "line_comments": ["//"]
+    "line_comments": ["//"],
+    "block_comments": [
+      ["/*", "*/"],
+      ["/+", "+/"]
+    ]
   },
   {
     "name": "Zig",

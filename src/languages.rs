@@ -23,6 +23,7 @@ pub struct Language {
     pub name: String,
     pub extensions: Box<[String]>,
     pub line_comments: Option<Box<[String]>>,
+    pub block_comments: Option<Box<[(String, String)]>>,
 }
 
 pub type LanguageId = usize;

@@ -60,8 +60,18 @@ fn count(path: &Path, lang: &Language) -> Result<Counts, std::io::Error> {
     let mut blank = 0;
     let mut invalid = 0;
 
-    let line_comments = lang.line_comments.as_ref().map(|lcs| &**lcs).unwrap_or(&[]);
+    let line_comments = lang
+        .line_comments
+        .as_ref()
+        .map(|c| c.as_ref())
+        .unwrap_or(&[]);
+    let block_comments = lang
+        .block_comments
+        .as_ref()
+        .map(|c| c.as_ref())
+        .unwrap_or(&[]);
 
+    let mut in_block_comment = None;
     for line in BufReader::new(File::open(path)?).lines() {
         let line = match line {
             Ok(l) => l,
@@ -71,17 +81,37 @@ fn count(path: &Path, lang: &Language) -> Result<Counts, std::io::Error> {
             }
         };
         let line = line.trim();
+
         if line.is_empty() {
             blank += 1;
+            continue;
         }
-        // TODO: account for block comments
-        else if line_comments.iter().any(|lc| line.starts_with(lc)) {
+
+        if let Some(end_token) = in_block_comment {
             comment += 1;
+            if line.ends_with(end_token) {
+                in_block_comment = None;
+            }
+            continue;
         }
-        // TODO: account for unsafe code
-        else {
-            code += 1;
+
+        if line_comments.iter().any(|lc| line.starts_with(lc)) {
+            comment += 1;
+            continue;
         }
+
+        if let Some((_, end_token)) = block_comments
+            .iter()
+            .find(|(start_token, _)| line.starts_with(start_token))
+        {
+            if !line.ends_with(end_token) {
+                in_block_comment = Some(end_token);
+            }
+            comment += 1;
+            continue;
+        }
+
+        code += 1;
     }
 
     Ok(Counts {
