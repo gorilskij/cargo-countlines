@@ -30,6 +30,9 @@ pub struct Config {
     pub exclude: GlobSet, // all glob patterns are absolute
     pub ignore_hidden: bool,
     pub quiet: bool,
+    pub max_depth: Option<usize>,
+    pub follow_links: bool,
+    pub machine_readable: bool,
 }
 
 #[derive(Clone)]
@@ -125,15 +128,20 @@ impl OutputCounts {
 }
 
 pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
-    let iter = WalkDir::new(&config.abs_root)
-        .into_iter()
-        .filter_entry(|entry| {
-            // `as_encoded_bytes` returns a "self-synchronizing superset of UTF-8"
-            if config.ignore_hidden && entry.file_name().as_encoded_bytes().starts_with(&[b'.']) {
-                return false;
-            }
-            !config.exclude.is_match(entry.path())
-        });
+    let mut iter = WalkDir::new(&config.abs_root);
+    if let Some(max_depth) = config.max_depth {
+        iter = iter.max_depth(max_depth);
+    }
+    if config.follow_links {
+        iter = iter.follow_links(true);
+    }
+    let iter = iter.into_iter().filter_entry(|entry| {
+        // `as_encoded_bytes` returns a "self-synchronizing superset of UTF-8"
+        if config.ignore_hidden && entry.file_name().as_encoded_bytes().starts_with(&[b'.']) {
+            return false;
+        }
+        !config.exclude.is_match(entry.path())
+    });
 
     let pbar = (!config.quiet).then(|| {
         let pbar = ProgressBar::no_length();

@@ -6,8 +6,7 @@ use tabled::{
 };
 
 use crate::{
-    count::{Counts, OutputCounts},
-    languages::Languages,
+    count::{Config, Counts, OutputCounts},
     util::format_number,
 };
 
@@ -28,58 +27,75 @@ fn sort_counts(output: &OutputCounts) -> Vec<(usize, &Counts)> {
     sorted_counts
 }
 
-pub fn make_table(output: &OutputCounts, languages: &Languages) -> String {
+pub fn make_table(output: &OutputCounts, config: &Config) -> String {
     let sorted_counts = sort_counts(output);
 
     let mut builder = Builder::default();
 
-    builder.push_record(["", "files", "code", "comment", "blank", "invalid"]);
+    if !config.machine_readable {
+        builder.push_record(["", "files", "code", "comment", "blank", "invalid"]);
+    }
 
-    let mut total_files = 0;
-    let mut total_code = 0;
-    let mut total_comment = 0;
-    let mut total_blank = 0;
-    let mut total_invalid = 0;
-    for &(lang_id, counts) in &sorted_counts {
+    for (lang_id, counts) in &sorted_counts {
         builder.push_record([
-            languages[lang_id].name.clone(),
+            config.languages[*lang_id].name.clone(),
             format_number(counts.files),
             format_number(counts.code),
             format_number(counts.comment),
             format_number(counts.blank),
             format_number(counts.invalid),
         ]);
-
-        total_files += counts.files;
-        total_code += counts.code;
-        total_comment += counts.comment;
-        total_blank += counts.blank;
-        total_invalid += counts.invalid;
     }
 
-    builder.push_record([
-        "Total".to_string(),
-        format_number(total_files),
-        format_number(total_code),
-        format_number(total_comment),
-        format_number(total_blank),
-        format_number(total_invalid),
-    ]);
+    if !config.machine_readable {
+        let mut total_files = 0;
+        let mut total_code = 0;
+        let mut total_comment = 0;
+        let mut total_blank = 0;
+        let mut total_invalid = 0;
+
+        for (_, counts) in &sorted_counts {
+            total_files += counts.files;
+            total_code += counts.code;
+            total_comment += counts.comment;
+            total_blank += counts.blank;
+            total_invalid += counts.invalid;
+        }
+
+        builder.push_record([
+            "Total".to_string(),
+            format_number(total_files),
+            format_number(total_code),
+            format_number(total_comment),
+            format_number(total_blank),
+            format_number(total_invalid),
+        ]);
+    }
 
     let mut table = builder.build();
-    table.modify(Segment::new(1.., 1..), Alignment::right());
-    // if there are no files, don't add the second internal hline as it makes
-    // the bottom of the table look wrong
-    if sorted_counts.is_empty() {
-        table.with(Style::rounded());
+
+    if config.machine_readable {
+        table.modify(Segment::new(.., 1..), Alignment::right());
     } else {
-        table.with(Style::rounded().horizontals([
-            (1, HorizontalLine::inherit(Style::modern_rounded())),
-            (
-                sorted_counts.len() + 1,
-                HorizontalLine::inherit(Style::modern_rounded()),
-            ),
-        ]));
+        table.modify(Segment::new(1.., 1..), Alignment::right());
+    }
+
+    if config.machine_readable {
+        table.with(Style::empty());
+    } else {
+        // if there are no files, don't add the second internal hline as it makes
+        // the bottom of the table look wrong
+        if sorted_counts.is_empty() {
+            table.with(Style::rounded());
+        } else {
+            table.with(Style::rounded().horizontals([
+                (1, HorizontalLine::inherit(Style::modern_rounded())),
+                (
+                    sorted_counts.len() + 1,
+                    HorizontalLine::inherit(Style::modern_rounded()),
+                ),
+            ]));
+        }
     }
 
     format!("{table}")

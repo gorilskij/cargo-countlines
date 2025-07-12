@@ -22,23 +22,27 @@ use thiserror::Error;
 
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(help_triggers("-h", "--help"))]
-///
+/// When calling from `cargo countlines`, the whole command is included
+/// so we must handle the `cargo` part
 struct Cargo {
     #[argh(subcommand)]
     countlines: Countlines,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
-///
+/// The actual `countlines` command
 #[argh(subcommand, name = "countlines")]
 struct Countlines {
-    #[argh(positional)]
+    #[argh(
+        positional,
+        description = "the path to be recursively analyzed, can be absolute or relative"
+    )]
     path: Option<String>,
 
     #[argh(
         option,
         short = 'e',
-        description = "comma-separated list of files and directories to exclude, both absolute and relative paths are supported"
+        description = "files and directories to exclude, supports standard unix glob syntax"
     )]
     exclude: Vec<String>,
 
@@ -55,6 +59,23 @@ struct Countlines {
         description = "do not print progress information while counting lines"
     )]
     quiet: bool,
+
+    #[argh(
+        option,
+        short = 'd',
+        description = "the maximum directory depth to analyze"
+    )]
+    max_depth: Option<usize>,
+
+    #[argh(switch, short = 'l', description = "follow symbolic links")]
+    follow_links: bool,
+
+    #[argh(
+        switch,
+        short = 'm',
+        description = "machine-readable output, without any fancy graphics or extra information"
+    )]
+    machine_readable: bool,
 }
 
 // === Errors ===
@@ -155,15 +176,20 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
         exclude,
         ignore_hidden: args.ignore_hidden,
         quiet: args.quiet,
+        max_depth: args.max_depth,
+        follow_links: args.follow_links,
+        machine_readable: args.machine_readable,
     })
 }
 
-fn print(output: OutputCounts, languages: &Languages, time: Duration) {
-    let table = make_table(&output, languages);
+fn print(output: OutputCounts, config: &Config, time: Duration) {
+    let table = make_table(&output, &config);
     println!("{table}");
 
-    println!("{} files errored", output.error_files);
-    println!("results in {:?}", time);
+    if !config.machine_readable {
+        println!("{} files errored", output.error_files);
+        println!("results in {:?}", time);
+    }
 }
 
 fn main_() -> Result<(), AppError> {
@@ -177,7 +203,7 @@ fn main_() -> Result<(), AppError> {
     let output = walk(&config)?;
     let time = start.elapsed();
 
-    print(output, &config.languages, time);
+    print(output, &config, time);
 
     Ok(())
 }
