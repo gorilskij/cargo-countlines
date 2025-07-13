@@ -80,7 +80,7 @@ struct Countlines {
     #[argh(
         option,
         short = 'm',
-        description = "running mode, possible values are `sync`, `async` (default), or `parallel`"
+        description = "running mode, possible values are `sync`, `async`, or `parallel` (default)"
     )]
     mode: Option<Mode>,
 }
@@ -206,7 +206,7 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
         max_depth: args.max_depth,
         follow_links: args.follow_links,
         machine_readable: args.machine_readable,
-        mode: args.mode.unwrap_or(Mode::Async),
+        mode: args.mode.unwrap_or(Mode::Parallel),
     })
 }
 

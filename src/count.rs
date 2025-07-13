@@ -5,6 +5,7 @@ use std::{
 
 use futures::StreamExt;
 use maybe_async::split;
+use rayon::iter::{ParallelBridge, ParallelIterator};
 use std::fs::File as StdFile;
 use std::io::BufRead as _;
 use std::io::BufReader as StdBufReader;
@@ -227,6 +228,14 @@ impl OutputCounts {
             }
         }
     }
+
+    fn merge(&mut self, other: &Self) {
+        for (lang_id, counts) in &other.counts {
+            self.append_counts(*lang_id, counts);
+        }
+        self.unmatched_files += other.unmatched_files;
+        self.error_files += other.error_files;
+    }
 }
 
 // === Walk internals ===
@@ -344,6 +353,34 @@ async fn async_walk(
     Ok(output)
 }
 
+fn parallel_walk(config: &Config, pbar: Option<&ProgressBar>) -> Result<OutputCounts, CountError> {
+    let iter = make_walk_iter(config);
+
+    let output = iter
+        .par_bridge()
+        .map(|entry| sync_walk_loop_body(entry, config, pbar))
+        .fold(
+            || OutputCounts::default(),
+            |mut output, entry_result| {
+                match entry_result {
+                    EntryResult::Some { lang_id, counts } => output.append_counts(lang_id, &counts),
+                    EntryResult::None => output.unmatched_files += 1,
+                    EntryResult::Err(_err) => output.error_files += 1,
+                }
+                output
+            },
+        )
+        .reduce(
+            || OutputCounts::default(),
+            |mut output1, output2| {
+                output1.merge(&output2);
+                output1
+            },
+        );
+
+    Ok(output)
+}
+
 pub fn run_count(config: &Config) -> Result<OutputCounts, AppError> {
     let rt = Runtime::new()?;
 
@@ -361,7 +398,7 @@ pub fn run_count(config: &Config) -> Result<OutputCounts, AppError> {
             let async_output = async_walk(config, pbar.as_ref());
             rt.block_on(async_output)
         }
-        Mode::Parallel => todo!(),
+        Mode::Parallel => parallel_walk(config, pbar.as_ref()),
     };
 
     pbar.as_ref().map(|pbar| pbar.finish_and_clear());
