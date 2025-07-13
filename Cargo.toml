@@ -1,6 +1,6 @@
 [package]
 name = "cargo-countlines"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Pietro Gorilskij <contact@gorilskij.com>"]
 edition = "2024"
 readme = "README.md"
