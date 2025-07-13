@@ -35,9 +35,15 @@ pub struct Languages {
 }
 
 impl Languages {
+    pub fn builtin() -> Self {
+        const DEFAULT_LANGUAGE_PACK: &str = include_str!("../language_packs/default.json");
+        let languages: Box<[Language]> = serde_json::from_str(DEFAULT_LANGUAGE_PACK).unwrap();
+        Self::from(languages).unwrap()
+    }
+
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Languages, LanguagesError> {
         let languages: Box<[Language]> = serde_json::from_reader(File::open(path)?)?;
-        Languages::from(languages)
+        Self::from(languages)
     }
 
     pub fn from(languages: Box<[Language]>) -> Result<Languages, LanguagesError> {

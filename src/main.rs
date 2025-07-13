@@ -83,6 +83,9 @@ struct Countlines {
         description = "running mode, possible values are `sync`, `async`, or `parallel` (default)"
     )]
     mode: Option<Mode>,
+
+    #[argh(option, short = 'L', description = "use a custom language pack")]
+    language_pack: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -176,7 +179,11 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
         }
     };
 
-    let languages = Languages::load("language_packs/default.json")?;
+    let languages = if let Some(lang_pack) = &args.language_pack {
+        Languages::load(Path::new(lang_pack))?
+    } else {
+        Languages::builtin()
+    };
 
     let mut builder = GlobSetBuilder::new();
     for pattern in &args.exclude {
