@@ -4,8 +4,8 @@ use std::{
 };
 
 use futures::StreamExt;
-use maybe_async::split;
 use rayon::iter::{ParallelBridge, ParallelIterator};
+use split_async::split;
 use std::fs::File as StdFile;
 use std::io::BufRead as _;
 use std::io::BufReader as StdBufReader;
