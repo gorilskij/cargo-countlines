@@ -1,18 +1,22 @@
 use std::{
     collections::{HashMap, hash_map::Entry},
-    fs::File,
-    io::{BufRead, BufReader},
     path::{Path, PathBuf},
 };
+
+use futures::StreamExt;
+use tokio::io::BufReader;
+use tokio::{fs::File, io::AsyncBufReadExt, runtime::Runtime};
 
 use globset::GlobSet;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{info, warn};
-use rayon::iter::{ParallelBridge, ParallelIterator};
 use thiserror::Error;
 use walkdir::WalkDir;
 
-use crate::languages::{Language, LanguageId, Languages};
+use crate::{
+    AppError,
+    languages::{Language, LanguageId, Languages},
+};
 
 #[derive(Error, Debug)]
 pub enum CountError {
@@ -54,7 +58,7 @@ impl Counts {
     }
 }
 
-fn count(path: &Path, lang: &Language) -> Result<Counts, std::io::Error> {
+async fn count(path: &Path, lang: &Language) -> Result<Counts, std::io::Error> {
     let mut code = 0;
     let mut comment = 0;
     let mut blank = 0;
@@ -72,14 +76,16 @@ fn count(path: &Path, lang: &Language) -> Result<Counts, std::io::Error> {
         .unwrap_or(&[]);
 
     let mut in_block_comment = None;
-    for line in BufReader::new(File::open(path)?).lines() {
-        let line = match line {
+    let mut iter = BufReader::new(File::open(path).await?).lines();
+    loop {
+        let line = match iter.next_line().await {
             Ok(l) => l,
             Err(_err) => {
                 invalid += 1;
                 continue;
             }
         };
+        let Some(line) = line else { break };
         let line = line.trim();
 
         if line.is_empty() {
@@ -147,17 +153,9 @@ impl OutputCounts {
             }
         }
     }
-
-    fn merge(&mut self, other: &Self) {
-        for (lang_id, counts) in &other.counts {
-            self.append_counts(*lang_id, counts);
-        }
-        self.unmatched_files += other.unmatched_files;
-        self.error_files += other.error_files;
-    }
 }
 
-pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
+async fn walk(config: &Config, pbar: Option<&ProgressBar>) -> Result<OutputCounts, CountError> {
     let mut iter = WalkDir::new(&config.abs_root);
     if let Some(max_depth) = config.max_depth {
         iter = iter.max_depth(max_depth);
@@ -173,17 +171,8 @@ pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
         !config.exclude.is_match(entry.path())
     });
 
-    let pbar = (!config.quiet).then(|| {
-        let pbar = ProgressBar::no_length();
-        pbar.set_style(
-            ProgressStyle::with_template("[{elapsed_precise}] {human_pos} {msg}").unwrap(),
-        );
-        pbar
-    });
-
-    let output = iter
-        .par_bridge()
-        .map(|entry| {
+    let output = futures::stream::iter(iter)
+        .map(async |entry| {
             let entry = match entry {
                 Ok(e) if e.file_type().is_file() => e,
                 Ok(_) => return EntryResult::None, // dir or symlink
@@ -215,7 +204,7 @@ pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
                         .as_encoded_bytes()
                         .ends_with(ext.as_bytes())
                     {
-                        return match count(entry.path(), lang) {
+                        return match count(entry.path(), lang).await {
                             Ok(counts) => EntryResult::Some { lang_id, counts },
                             Err(err) => {
                                 warn!("error in file {:?}", entry.path());
@@ -231,26 +220,35 @@ pub fn walk(config: &Config) -> Result<OutputCounts, CountError> {
 
             EntryResult::None
         })
-        .fold(
-            || OutputCounts::default(),
-            |mut output, entry_result| {
-                match entry_result {
-                    EntryResult::Some { lang_id, counts } => output.append_counts(lang_id, &counts),
-                    EntryResult::None => output.unmatched_files += 1,
-                    EntryResult::Err(_err) => output.error_files += 1,
-                }
-                output
-            },
-        )
-        .reduce(
-            || OutputCounts::default(),
-            |mut output1, output2| {
-                output1.merge(&output2);
-                output1
-            },
+        .buffer_unordered(20)
+        .fold(OutputCounts::default(), async |mut output, entry_result| {
+            match entry_result {
+                EntryResult::Some { lang_id, counts } => output.append_counts(lang_id, &counts),
+                EntryResult::None => output.unmatched_files += 1,
+                EntryResult::Err(_err) => output.error_files += 1,
+            }
+            output
+        })
+        .await;
+
+    Ok(output)
+}
+
+pub fn run_count(config: &Config) -> Result<OutputCounts, AppError> {
+    let rt = Runtime::new()?;
+
+    let pbar = (!config.quiet).then(|| {
+        let pbar = ProgressBar::no_length();
+        pbar.set_style(
+            ProgressStyle::with_template("[{elapsed_precise}] {human_pos} {msg}").unwrap(),
         );
+        pbar
+    });
+
+    let async_output = walk(config, pbar.as_ref());
+    let output = rt.block_on(async_output);
 
     pbar.as_ref().map(|pbar| pbar.finish_and_clear());
 
-    Ok(output)
+    Ok(output?)
 }

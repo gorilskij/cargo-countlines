@@ -12,7 +12,7 @@ use std::{
 };
 
 use argh::FromArgs;
-use count::{Config, CountError, OutputCounts, walk};
+use count::{Config, CountError, OutputCounts, run_count};
 use globset::{Glob, GlobSetBuilder};
 use languages::{Languages, LanguagesError};
 use table::make_table;
@@ -200,7 +200,7 @@ fn main_() -> Result<(), AppError> {
     let config = parse_args(&args)?;
 
     let start = Instant::now();
-    let output = walk(&config)?;
+    let output = run_count(&config)?;
     let time = start.elapsed();
 
     print(output, &config, time);

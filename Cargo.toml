@@ -6,14 +6,15 @@ edition = "2024"
 [dependencies]
 argh = "0.1.13"
 env_logger = "0.11.8"
+futures = "0.3.31"
 globset = "0.4.16"
 indicatif = "0.18.0"
 log = "0.4.27"
-rayon = "1.10.0"
 serde = "1.0.219"
 serde_json = "1.0.140"
 tabled = "0.20.0"
 thiserror = "2.0.12"
+tokio = { version = "1.46.1", features = ["fs", "io-util", "rt", "rt-multi-thread"] }
 walkdir = "2.5.0"
 
 [profile.release]
