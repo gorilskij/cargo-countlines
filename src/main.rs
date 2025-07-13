@@ -11,7 +11,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use argh::FromArgs;
+use argh::{FromArgValue, FromArgs};
 use count::{Config, CountError, OutputCounts, run_count};
 use globset::{Glob, GlobSetBuilder};
 use languages::{Languages, LanguagesError};
@@ -72,10 +72,37 @@ struct Countlines {
 
     #[argh(
         switch,
-        short = 'm',
+        short = 'r',
         description = "machine-readable output, without any fancy graphics or extra information"
     )]
     machine_readable: bool,
+
+    #[argh(
+        option,
+        short = 'm',
+        description = "running mode, possible values are `sync`, `async` (default), or `parallel`"
+    )]
+    mode: Option<Mode>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum Mode {
+    Sync,
+    Async,
+    Parallel,
+}
+
+impl FromArgValue for Mode {
+    fn from_arg_value(value: &str) -> Result<Self, String> {
+        match value {
+            "sync" => Ok(Self::Sync),
+            "async" => Ok(Self::Async),
+            "parallel" => Ok(Self::Parallel),
+            m => Err(format!(
+                "invalid mode `{m}`, expected `sync`, `async`, or `parallel`"
+            )),
+        }
+    }
 }
 
 // === Errors ===
@@ -179,6 +206,7 @@ fn parse_args(args: &Countlines) -> Result<Config, AppError> {
         max_depth: args.max_depth,
         follow_links: args.follow_links,
         machine_readable: args.machine_readable,
+        mode: args.mode.unwrap_or(Mode::Async),
     })
 }
 
